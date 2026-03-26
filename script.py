@@ -1,53 +1,99 @@
 import requests
 import pandas as pd
-from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
+import os
 
 NETWORK_ID = "capital-bikeshare"
 STATION_ID = "7a03f9cbe938f3be78aa94c699049942"
 
-# --- Fetch ---
-def fetch_station():
-    url = f"http://api.citybik.es/v2/networks/{NETWORK_ID}"
-    data = requests.get(url, timeout=30).json()["network"]["stations"]
+SHEET_ID = "1SPAN_YK6V8vxS9BjZxiD9-8ryGIEpyAXbrkjB6N_bQc"
 
-    df = pd.DataFrame(data)
 
-    df["timestamp"] = pd.to_datetime(
-        df["timestamp"].str.replace("Z", "", regex=False), utc=True
+# --- Fetch (UNCHANGED logic, full schema preserved) ---
+def fetch_citybikes_network(network_id: str) -> pd.DataFrame:
+    endpoint = f"http://api.citybik.es/v2/networks/{network_id}"
+    
+    response = requests.get(endpoint, timeout=30)
+    response.raise_for_status()
+    
+    payload = response.json()
+    station_records = payload["network"]["stations"]
+
+    if not station_records:
+        return pd.DataFrame()
+
+    stations_table = pd.DataFrame(station_records)
+
+    # timestamp
+    stations_table["timestamp"] = pd.to_datetime(
+        stations_table["timestamp"].str.replace("Z", "", regex=False),
+        utc=True
     )
 
-    df = df.query("id == @STATION_ID").copy()
+    # expand extra
+    if "extra" in stations_table.columns:
+        extra_expanded = pd.json_normalize(stations_table["extra"])
+        stations_table = pd.concat(
+            [stations_table.drop(columns=["extra"]), extra_expanded],
+            axis=1
+        )
 
-    df["capacity"] = df["free_bikes"] + df["empty_slots"]
+    # flatten rental_uris
+    if "rental_uris.android" in stations_table.columns:
+        stations_table.rename(columns={
+            "rental_uris.android": "rental_android",
+            "rental_uris.ios": "rental_ios"
+        }, inplace=True)
 
-    return df[[
-        "id", "name", "timestamp",
-        "free_bikes", "empty_slots", "capacity"
-    ]]
+    # network id
+    stations_table["network_id"] = network_id
 
-# --- Google Sheets auth ---
+    # capacity
+    if {"free_bikes", "empty_slots"}.issubset(stations_table.columns):
+        stations_table["capacity"] = (
+            stations_table["free_bikes"] + stations_table["empty_slots"]
+        )
+
+    return stations_table
+
+
+# --- Google Sheets ---
 def connect_sheets():
     creds = Credentials.from_service_account_info(
-        eval(SERVICE_ACCOUNT_JSON),
+        eval(os.environ["GOOGLE_SERVICE_ACCOUNT"]),
         scopes=["https://www.googleapis.com/auth/spreadsheets"]
     )
     client = gspread.authorize(creds)
-    return client.open(SHEET_NAME).sheet1
+    return client.open_by_key(SHEET_ID).sheet1
 
-# --- Append ---
+
+# --- Append with dynamic headers ---
 def append_data(df, sheet):
-    df["timestamp"] = df["timestamp"].astype(str)
+    if df.empty:
+        return
+
+    # filter one station ONLY
+    df = df.query("id == @STATION_ID").copy()
+
+    if df.empty:
+        return
+
+    # convert all to string (Sheets safe)
+    df = df.astype(str)
+
+    existing_header = sheet.row_values(1)
+
+    # first run → write header
+    if not existing_header:
+        sheet.append_row(df.columns.tolist())
+
+    # align columns to sheet
     sheet.append_rows(df.values.tolist())
 
-# --- ENV VARS ---
-import os
-SERVICE_ACCOUNT_JSON = os.environ["GOOGLE_SERVICE_ACCOUNT"]
-SHEET_NAME = os.environ["SHEET_NAME"]
 
 # --- Run ---
 if __name__ == "__main__":
-    df = fetch_station()
+    df = fetch_citybikes_network(NETWORK_ID)
     sheet = connect_sheets()
     append_data(df, sheet)
