@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 import os
+import json
 
 NETWORK_ID = "capital-bikeshare"
 STATION_ID = "7a03f9cbe938f3be78aa94c699049942"
@@ -10,7 +11,7 @@ STATION_ID = "7a03f9cbe938f3be78aa94c699049942"
 SHEET_ID = "1SPAN_YK6V8vxS9BjZxiD9-8ryGIEpyAXbrkjB6N_bQc"
 
 
-# --- Fetch (UNCHANGED logic, full schema preserved) ---
+# --- Fetch ---
 def fetch_citybikes_network(network_id: str) -> pd.DataFrame:
     endpoint = f"http://api.citybik.es/v2/networks/{network_id}"
     
@@ -55,20 +56,27 @@ def fetch_citybikes_network(network_id: str) -> pd.DataFrame:
             stations_table["free_bikes"] + stations_table["empty_slots"]
         )
 
+    # remove last_updated (you chose timestamp instead)
+    if "last_updated" in stations_table.columns:
+        stations_table.drop(columns=["last_updated"], inplace=True)
+
+    # add collected_at (your true time index)
+    stations_table["collected_at"] = pd.Timestamp.utcnow()
+
     return stations_table
 
 
 # --- Google Sheets ---
 def connect_sheets():
     creds = Credentials.from_service_account_info(
-        eval(os.environ["GOOGLE_SERVICE_ACCOUNT"]),
+        json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"]),
         scopes=["https://www.googleapis.com/auth/spreadsheets"]
     )
     client = gspread.authorize(creds)
     return client.open_by_key(SHEET_ID).sheet1
 
 
-# --- Append with dynamic headers ---
+# --- Append ---
 def append_data(df, sheet):
     if df.empty:
         return
@@ -82,10 +90,13 @@ def append_data(df, sheet):
     existing_header = sheet.row_values(1)
     new_header = df.columns.tolist()
 
-    # If header mismatch → RESET header (critical fix)
-    if existing_header != new_header:
-        sheet.clear()
+    # first run → set header
+    if not existing_header:
         sheet.append_row(new_header)
+
+    # prevent silent corruption
+    elif existing_header != new_header:
+        raise ValueError("Schema mismatch detected — stopping to prevent data loss")
 
     sheet.append_rows(df.values.tolist())
 
