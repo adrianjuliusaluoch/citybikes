@@ -23,5 +23,5 @@ jobs:
 
       - name: Run script
         env:
-          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: python script.py
