@@ -15,7 +15,7 @@ SHEET_ID = "1SPAN_YK6V8vxS9BjZxiD9-8ryGIEpyAXbrkjB6N_bQc"
 def fetch_citybikes_network(network_id: str) -> pd.DataFrame:
     endpoint = f"http://api.citybik.es/v2/networks/{network_id}"
     
-    response = requests.get(endpoint, timeout=30)
+    response = requests.get(endpoint, headers={"Cache-Control": "no-cache"}, timeout=60)
     response.raise_for_status()
     
     payload = response.json()
