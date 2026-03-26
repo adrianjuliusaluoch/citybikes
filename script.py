@@ -73,22 +73,20 @@ def append_data(df, sheet):
     if df.empty:
         return
 
-    # filter one station ONLY
     df = df.query("id == @STATION_ID").copy()
-
     if df.empty:
         return
 
-    # convert all to string (Sheets safe)
     df = df.astype(str)
 
     existing_header = sheet.row_values(1)
+    new_header = df.columns.tolist()
 
-    # first run → write header
-    if not existing_header:
-        sheet.append_row(df.columns.tolist())
+    # If header mismatch → RESET header (critical fix)
+    if existing_header != new_header:
+        sheet.clear()
+        sheet.append_row(new_header)
 
-    # align columns to sheet
     sheet.append_rows(df.values.tolist())
 
 
