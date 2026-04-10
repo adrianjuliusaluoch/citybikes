@@ -5,8 +5,11 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 
-NETWORK_ID = "capital-bikeshare"
-STATION_ID = "7a03f9cbe938f3be78aa94c699049942"
+NETWORK_IDS = ["capital-bikeshare", 'citi-bike-nyc']
+STATION_IDS = [
+    "7a03f9cbe938f3be78aa94c699049942",
+    "da721ec687d6a14a6eb5bcf50b76df7e"
+]
 
 SHEET_ID = "1SPAN_YK6V8vxS9BjZxiD9-8ryGIEpyAXbrkjB6N_bQc"
 
@@ -81,10 +84,11 @@ def append_data(df, sheet):
     if df.empty:
         return
 
-    df = df.query("id == @STATION_ID").copy()
+    df = df.query("id in @STATION_IDS").copy()
     if df.empty:
         return
 
+    df = df.drop_duplicates(subset=["network_id", "id", "timestamp"])
     df = df.astype(str)
 
     existing_header = sheet.row_values(1)
@@ -103,6 +107,23 @@ def append_data(df, sheet):
 
 # --- Run ---
 if __name__ == "__main__":
-    df = fetch_citybikes_network(NETWORK_ID)
+    citybikes_tables = []
+
+    for network_id in NETWORK_IDS:
+        try:
+            network_table = fetch_citybikes_network(network_id)
+
+            if not network_table.empty:
+                citybikes_tables.append(network_table)
+
+        except Exception as error:
+            print(f"Error fetching {network_id}: {error}")
+
+    if not citybikes_tables:
+        print("No data fetched")
+        exit()
+
+    df = pd.concat(citybikes_tables, ignore_index=True)
+
     sheet = connect_sheets()
     append_data(df, sheet)
