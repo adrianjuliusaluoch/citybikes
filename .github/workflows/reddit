@@ -1,0 +1,25 @@
+name: Collect Reddit AB Test Data
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: reddit-ab-tracker-job
+  cancel-in-progress: false
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install pandas requests gspread google-auth
+      - name: Run script
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run:
+          python fetch_reddit.py
