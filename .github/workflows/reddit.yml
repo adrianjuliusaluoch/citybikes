@@ -17,9 +17,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install deps
-        run: pip install pandas requests gspread google-auth
+        run: pip install httpx beautifulsoup4 pandas gspread google-auth
       - name: Run script
         env:
-          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
         run:
           python fetch_reddit.py
