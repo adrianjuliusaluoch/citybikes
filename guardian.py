@@ -48,7 +48,7 @@ def fetch_guardian_routes(route_pairs: list, travel_date: str) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].apply(json.dumps)
 
-    df["collected_at"] = pd.Timestamp.now("UTC")
+    df["collected_at"] = pd.Timestamp.now("Africa/Nairobi")
     return df
 
 # --- Google Sheets ---
