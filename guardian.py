@@ -64,6 +64,7 @@ def connect_sheets():
 def append_data(df, sheet):
     if df.empty:
         return
+    print(df.duplicated(subset=["bookingRef", "toCity"]).sum())
     df = df.drop_duplicates(subset=["bookingRef", "toCity", "collected_at"])
     df = df.astype(str)
 
