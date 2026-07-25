@@ -60,12 +60,10 @@ def connect_sheets():
     client = gspread.authorize(creds)
     return client.open_by_key(SHEET_ID).sheet1
 
-# --- Append ---
 def append_data(df, sheet):
     if df.empty:
-        return
-    print(df.duplicated(subset=["bookingRef", "toCity"]).sum())
-    df = df.drop_duplicates(subset=["bookingRef", "toCity", "collected_at"])
+        return df
+    df = df.drop_duplicates(subset=["bookingRef", "IdTo", "collected_at"])
     df = df.astype(str)
 
     existing_header = sheet.row_values(1)
@@ -77,17 +75,17 @@ def append_data(df, sheet):
         raise ValueError("Schema mismatch detected — stopping to prevent data loss")
 
     sheet.append_rows(df.values.tolist())
+    return df
 
 # --- Run ---
 if __name__ == "__main__":
     tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT08:00:00.000Z")
 
     df = fetch_guardian_routes(ROUTE_PAIRS, tomorrow)
-
     if df.empty:
         print("No data fetched")
         exit()
 
     sheet = connect_sheets()
-    append_data(df, sheet)
-    print(f"{len(df)} rows appended")
+    appended_df = append_data(df, sheet)
+    print(f"{len(appended_df)} rows appended")
