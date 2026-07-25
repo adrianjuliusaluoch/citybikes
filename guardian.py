@@ -93,7 +93,7 @@ def append_data(df, sheet):
 
 # --- Run ---
 if __name__ == "__main__":
-    tomorrow = (datetime.now() + timedelta(days=1))
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT08:00:00.000Z")
     df, failed_routes = fetch_guardian_routes(ROUTE_PAIRS, tomorrow)
 
     if df.empty:
