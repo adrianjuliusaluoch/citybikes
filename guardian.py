@@ -7,6 +7,9 @@ from google.oauth2.service_account import Credentials
 import os
 from datetime import datetime, timedelta
 
+creds_dict = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"])
+print("Authenticating as:", creds_dict["client_email"])
+
 TOWNS = ["Yala", "Kisumu", "Kakamega", "Busia"]
 SHEET_ID = "1JCePIF30s2MxeUDDvgyK4aSGerGarKE4AuG7cnn1MS8"
 
