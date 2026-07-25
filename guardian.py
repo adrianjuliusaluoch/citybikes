@@ -7,9 +7,6 @@ from google.oauth2.service_account import Credentials
 import os
 from datetime import datetime, timedelta
 
-creds_dict = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"])
-print("Authenticating as:", creds_dict["client_email"])
-
 TOWNS = ["Yala", "Kisumu", "Kakamega", "Busia"]
 SHEET_ID = "1JCePIF30s2MxeUDDvgyK4aSGerGarKE4AuG7cnn1MS8"
 
@@ -29,7 +26,7 @@ def fetch_guardian_routes(route_pairs: list, travel_date: str) -> pd.DataFrame:
             response = requests.post(
                 endpoint, json=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=30
+                timeout=300
             )
             response.raise_for_status()
             data = response.json()
