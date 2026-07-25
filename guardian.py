@@ -63,7 +63,7 @@ def connect_sheets():
 def append_data(df, sheet):
     if df.empty:
         return df
-    # df = df.drop_duplicates(subset=["bookingRef", "IdTo", "collected_at"])
+        
     df = df.astype(str)
 
     existing_header = sheet.row_values(1)
