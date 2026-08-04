@@ -19,10 +19,15 @@ jobs:
       - name: Install deps
         run: pip install pandas requests gspread google-auth
       - name: Run script
+        uses: nick-fields/retry@v3
         env:
           GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-        run: |
-          python script.py
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 15
+          retry_on: error
+          command: python script.py
       - name: Update and commit script.py
         run: |
           # Add or update a timestamp comment at top of file
