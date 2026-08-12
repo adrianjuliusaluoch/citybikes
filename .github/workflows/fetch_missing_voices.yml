@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install deps
-        run: pip install pandas requests gspread google-auth beautifulsoup4
+        run: pip install pandas gspread google-auth beautifulsoup4 aiohttp tqdm
       - name: Run script
         uses: nick-fields/retry@v3
         env:
