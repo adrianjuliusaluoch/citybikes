@@ -1,0 +1,33 @@
+name: Fetch Missing Voices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * 1"  # weekly, Monday 6pm UTC / 9pm Nairobi
+
+concurrency:
+  group: missing-voices-job
+  cancel-in-progress: false
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install pandas requests gspread google-auth beautifulsoup4
+      - name: Run script
+        uses: nick-fields/retry@v3
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 15
+          retry_on: error
+          command: python missing_voices.py
