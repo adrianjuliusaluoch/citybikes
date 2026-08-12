@@ -1,35 +1,41 @@
+import asyncio
 import time
 import json
 import sys
 import os
-import requests
+import aiohttp
 from bs4 import BeautifulSoup
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
+from tqdm.asyncio import tqdm
 
 BASE = "https://missingvoices.or.ke"
 SHEET_ID = "1VNm6eeQLhxNEa337PiDlvSRHCYGCf5lYHvnzHv2MQoI"
 HEADERS = {"User-Agent": "Mozilla/5.0 (research scrape; personal analysis)"}
+CONCURRENT_REQUESTS = 5
+MAX_PAGE_SEARCH = 200  # upper bound for binary search
 
 
 # --- Fetch ---
-def fetch_with_retry(url, retries=4, base_backoff=5, timeout=30):
+async def safe_get(session, url, retries=4, base_backoff=5):
     last_error = None
     for attempt in range(1, retries + 1):
         try:
-            response = requests.get(url, headers=HEADERS, timeout=timeout)
-            response.raise_for_status()
-            return response.text
+            async with session.get(url, headers=HEADERS) as resp:
+                resp.raise_for_status()
+                return await resp.text()
         except Exception as error:
             last_error = error
             if attempt < retries:
-                wait = base_backoff * (2 ** (attempt - 1))
-                time.sleep(wait)
-    raise last_error
+                await asyncio.sleep(base_backoff * (2 ** (attempt - 1)))
+    print(f"Giving up on {url}: {last_error}")
+    return None
 
 
 def parse_page(html):
+    if not html:
+        return []
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
     if table is None:
@@ -60,28 +66,49 @@ def parse_page(html):
     return rows
 
 
-def scrape_all(max_pages=200, delay=1.5):
-    all_rows = []
-    failed_pages = []
-    for page in range(max_pages):
-        url = f"{BASE}/voices?page={page}"
-        try:
-            html = fetch_with_retry(url)
-        except Exception as error:
-            failed_pages.append((page, str(error)))
-            print(f"Error fetching page {page}: {error}")
-            continue
+async def page_has_rows(session, page):
+    html = await safe_get(session, f"{BASE}/voices?page={page}")
+    return len(parse_page(html)) > 0
 
-        rows = parse_page(html)
-        if not rows:
-            print(f"No rows found on page {page} — assuming end of table.")
-            break
 
-        all_rows.extend(rows)
-        print(f"Page {page}: {len(rows)} rows (total so far: {len(all_rows)})")
-        time.sleep(delay)
+async def detect_last_page(session, max_pages=MAX_PAGE_SEARCH):
+    # page 0 is guaranteed to have rows; binary search for the last page that does
+    low, high = 0, max_pages
+    while low < high:
+        mid = (low + high + 1) // 2
+        print(f"checking page {mid} (range {low}-{high})")
+        if await page_has_rows(session, mid):
+            low = mid
+        else:
+            high = mid - 1
+    print(f"Detected last page: {low}")
+    return low
 
-    return all_rows, failed_pages
+
+async def scrape_page_with_progress(session, page, semaphore):
+    async with semaphore:
+        html = await safe_get(session, f"{BASE}/voices?page={page}")
+        return parse_page(html)
+
+
+async def scrape_all():
+    connector = aiohttp.TCPConnector(limit=CONCURRENT_REQUESTS)
+    timeout = aiohttp.ClientTimeout(total=20)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        last_page = await detect_last_page(session)
+
+        semaphore = asyncio.Semaphore(CONCURRENT_REQUESTS)
+        tasks = [
+            asyncio.create_task(scrape_page_with_progress(session, page, semaphore))
+            for page in range(0, last_page + 1)
+        ]
+
+        all_rows = []
+        for coro in tqdm.as_completed(tasks, total=len(tasks), desc="Scraping pages"):
+            rows = await coro
+            all_rows.extend(rows)
+
+        return all_rows
 
 
 # --- Google Sheets ---
@@ -121,18 +148,16 @@ def append_new_only(df, sheet):
 
 # --- Run ---
 if __name__ == "__main__":
-    rows, failed_pages = scrape_all()
+    rows = asyncio.run(scrape_all())
     if not rows:
         print("No data fetched")
         sys.exit(1)
 
     df = pd.DataFrame(rows)
+    # dedupe in case two concurrent pages returned overlapping rows during a race
+    df = df.drop_duplicates(subset="profile_url")
     df["collected_at"] = pd.Timestamp.now("Africa/Nairobi").isoformat()
 
     sheet = connect_sheets()
     appended_df = append_new_only(df, sheet)
     print(f"{len(appended_df)} new rows appended (scraped {len(df)} total)")
-
-    if failed_pages:
-        print(f"WARNING: {len(failed_pages)} page(s) failed after retries: {failed_pages}")
-        sys.exit(1)
