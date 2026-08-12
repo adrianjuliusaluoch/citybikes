@@ -2,8 +2,6 @@ name: Fetch Missing Voices
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 18 * * 1"  # weekly, Monday 6pm UTC / 9pm Nairobi
 
 concurrency:
   group: missing-voices-job
