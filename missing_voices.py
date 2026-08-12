@@ -155,7 +155,7 @@ if __name__ == "__main__":
 
     df = pd.DataFrame(rows)
     # dedupe in case two concurrent pages returned overlapping rows during a race
-    df = df.drop_duplicates(subset="profile_url")
+    df = df.drop_duplicates()
     df["collected_at"] = pd.Timestamp.now("Africa/Nairobi").isoformat()
 
     sheet = connect_sheets()
