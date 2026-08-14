@@ -1,7 +1,7 @@
 name: Retry Pipelines On Failure
 on:
   workflow_run:
-    workflows: ["Collect CityBikes Data", "Fetch Fares", "Fetch Missing Voices"]
+    workflows: ["Fetch Fares", "Fetch Missing Voices"]
     types: [completed]
 
 permissions:
