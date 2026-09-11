@@ -2,3 +2,6 @@ pandas
 requests 
 gspread 
 google-auth
+beautifulsoup4 
+aiohttp 
+tqdm
